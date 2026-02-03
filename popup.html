@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 260px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      background: #1a1a1e;
+      color: #e5e5e5;
+      margin: 0;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    label {
+      display: block;
+      margin-bottom: 12px;
+      color: #a3a3a3;
+      font-size: 12px;
+    }
+    select, input[type="checkbox"] {
+      margin-top: 4px;
+    }
+    select {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #3a3a3e;
+      background: #2a2a2e;
+      color: #e5e5e5;
+      font-size: 13px;
+    }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .checkbox-row label {
+      margin: 0;
+      color: #e5e5e5;
+    }
+    .status {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid #2a2a2e;
+      font-size: 11px;
+      color: #a3a3a3;
+    }
+  </style>
+</head>
+<body>
+  <h2>Claude Companion</h2>
+
+  <div id="detected-model" style="display:none; margin-bottom:8px; font-size:11px; color:#4ade80;"></div>
+
+  <label>
+    Model context size (auto-detected or manual)
+    <select id="model-select">
+      <option value="200000">Claude (200K)</option>
+      <option value="1000000">Claude - Extended (1M)</option>
+    </select>
+  </label>
+
+  <div class="checkbox-row">
+    <input type="checkbox" id="nudge-toggle" checked>
+    <label for="nudge-toggle">Enable smart nudges</label>
+  </div>
+
+  <div class="status" id="status-line">Loading...</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

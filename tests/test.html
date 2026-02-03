@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Claude Companion Tests</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a1e;
+      color: #e5e5e5;
+      padding: 24px;
+      margin: 0;
+      max-width: 800px;
+    }
+    h1 { margin: 0 0 8px; font-size: 20px; }
+    .intro {
+      color: #a3a3a3;
+      font-size: 13px;
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+    .intro code {
+      background: #2a2a2e;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .note {
+      background: #2a2a2e;
+      border-left: 3px solid #facc15;
+      padding: 12px 16px;
+      margin-bottom: 24px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .note-title { color: #facc15; font-weight: 600; margin-bottom: 4px; }
+    .test-group { margin-bottom: 24px; }
+    .test-group h2 { font-size: 14px; color: #a3a3a3; margin: 0 0 8px; }
+    .test-group-note { font-size: 11px; color: #737373; margin-bottom: 10px; }
+    .test {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: #2a2a2e;
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+    .test.pass { border-left: 3px solid #4ade80; }
+    .test.fail { border-left: 3px solid #ef4444; }
+    .test .status { font-weight: 600; width: 50px; }
+    .test.pass .status { color: #4ade80; }
+    .test.fail .status { color: #ef4444; }
+    .test .name { flex: 1; }
+    .test .detail { color: #a3a3a3; font-size: 12px; }
+    .summary {
+      margin-top: 20px;
+      padding: 12px 16px;
+      background: #2a2a2e;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+    .summary.all-pass { color: #4ade80; }
+    .summary.has-fail { color: #ef4444; }
+
+    .manual-tests { margin-top: 32px; }
+    .manual-tests h2 { font-size: 16px; margin: 0 0 12px; }
+    .checklist { list-style: none; padding: 0; margin: 0; }
+    .checklist li {
+      padding: 10px 12px;
+      background: #2a2a2e;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .checklist input[type="checkbox"] { margin-top: 2px; }
+    .checklist .step { flex: 1; }
+    .checklist .step strong { color: #f5f5f5; }
+    .checklist .expected { font-size: 12px; color: #a3a3a3; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Claude Companion - Test Suite</h1>
+  <p class="intro">
+    Unit tests for helper functions. These run in-browser without dependencies.<br>
+    For full integration testing, use the manual checklist below.
+  </p>
+
+  <div class="note">
+    <div class="note-title">Limitations</div>
+    These are isolated unit tests only. They don't test:
+    <ul style="margin: 8px 0 0; padding-left: 20px;">
+      <li>Actual DOM scraping on claude.ai (requires live site)</li>
+      <li>Chrome extension APIs (requires extension context)</li>
+      <li>MutationObserver behavior (requires real DOM mutations)</li>
+      <li>Message passing between content script and background worker</li>
+    </ul>
+  </div>
+
+  <div id="results"></div>
+  <div id="summary" class="summary"></div>
+
+  <div class="manual-tests">
+    <h2>Manual Integration Checklist</h2>
+    <p style="font-size: 12px; color: #a3a3a3; margin-bottom: 16px;">
+      Perform these steps on <code>claude.ai</code> with the extension loaded.
+    </p>
+    <ul class="checklist">
+      <li>
+        <input type="checkbox">
+        <div class="step">
+          <strong>1. Extension loads</strong>
+          <div class="expected">Go to chrome://extensions — Claude Companion shows as loaded with no errors</div>
+        </div>
+      </li>
+      <li>
+        <input type="checkbox">
+        <div class="step">
+          <strong>2. Meter appears</strong>
+          <div class="expected">Open claude.ai — green meter circle visible in bottom-right corner</div>
+        </div>
+      </li>
+      <li>
+        <input type="checkbox">
+        <div class="step">
+          <strong>3. Existing thread loads</strong>
+          <div class="expected">Open an existing conversation — meter shows non-zero percentage</div>
+        </div>
+      </li>
+      <li>
+        <input type="checkbox">
+        <div class="step">
+          <strong>4. Tooltip works</strong>
+          <div class="expected">Hover meter — tooltip shows token count, percentage, and nudge message</div>
+        </div>
+      </li>
+      <li>
+        <input type="checkbox">
+        <div class="step">
+          <strong>5. Live updates</strong>
+          <div class="expected">Send a message — meter percentage increases after response</div>
+        </div>
+      </li>
+      <li>
+        <input type="checkbox">
+        <div class="step">
+          <strong>6. Model detection</strong>
+          <div class="expected">Open popup — shows "Detected: Opus 4.5" (or current model)</div>
+        </div>
+      </li>
+      <li>
+        <input type="checkbox">
+        <div class="step">
+          <strong>7. Manual model override</strong>
+          <div class="expected">Change dropdown to "Extended (1M)" — meter percentage recalculates lower</div>
+        </div>
+      </li>
+      <li>
+        <input type="checkbox">
+        <div class="step">
+          <strong>8. Nudge toggle</strong>
+          <div class="expected">Disable "Enable smart nudges" — tooltip nudge text changes or disappears</div>
+        </div>
+      </li>
+      <li>
+        <input type="checkbox">
+        <div class="step">
+          <strong>9. Color thresholds</strong>
+          <div class="expected">On a long conversation (40%+), meter turns yellow. At 70%+ turns red.</div>
+        </div>
+      </li>
+      <li>
+        <input type="checkbox">
+        <div class="step">
+          <strong>10. Page navigation</strong>
+          <div class="expected">Switch between conversations — meter updates for each thread</div>
+        </div>
+      </li>
+      <li>
+        <input type="checkbox">
+        <div class="step">
+          <strong>11. New conversation</strong>
+          <div class="expected">Start a new chat — meter resets to 0% or very low</div>
+        </div>
+      </li>
+      <li>
+        <input type="checkbox">
+        <div class="step">
+          <strong>12. Performance</strong>
+          <div class="expected">On long threads, page remains responsive (no lag when typing)</div>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <script>
+    const results = [];
+    const testNotes = {};
+
+    function test(name, fn, note) {
+      if (note) testNotes[name] = note;
+      try {
+        const result = fn();
+        if (result === true || result === undefined) {
+          results.push({ name, pass: true });
+        } else {
+          results.push({ name, pass: false, detail: result || 'Returned falsy' });
+        }
+      } catch (e) {
+        results.push({ name, pass: false, detail: e.message });
+      }
+    }
+
+    function assertEqual(actual, expected, msg) {
+      if (actual !== expected) {
+        throw new Error(msg || `Expected ${expected}, got ${actual}`);
+      }
+    }
+
+    // ============ Token Estimation Tests ============
+    // Note: Uses simple char/4 heuristic. ~15% accuracy vs real tokenizer.
+
+    function estimateTokens(text) {
+      return Math.ceil((text || '').length / 4);
+    }
+
+    test('estimateTokens: empty string returns 0', () => {
+      assertEqual(estimateTokens(''), 0);
+    }, 'Edge case: empty input should not break');
+
+    test('estimateTokens: null returns 0', () => {
+      assertEqual(estimateTokens(null), 0);
+    }, 'Edge case: null coerced to empty string');
+
+    test('estimateTokens: 4 chars = 1 token', () => {
+      assertEqual(estimateTokens('test'), 1);
+    }, 'Base case: 4 characters = 1 token');
+
+    test('estimateTokens: 5 chars = 2 tokens (ceiling)', () => {
+      assertEqual(estimateTokens('hello'), 2);
+    }, 'Ceiling rounds up partial tokens');
+
+    test('estimateTokens: 100 chars = 25 tokens', () => {
+      assertEqual(estimateTokens('a'.repeat(100)), 25);
+    });
+
+    test('estimateTokens: 1000 chars = 250 tokens', () => {
+      assertEqual(estimateTokens('x'.repeat(1000)), 250);
+    });
+
+    // ============ Nudge Threshold Tests ============
+    // Note: Thresholds are 40% (yellow), 70% (warning), 85% (red), 95% (critical)
+
+    const NUDGE_THRESHOLDS = [
+      { pct: 95, level: 'critical' },
+      { pct: 85, level: 'red' },
+      { pct: 70, level: 'warning' },
+      { pct: 40, level: 'yellow' },
+    ];
+
+    function getNudgeLevel(pct) {
+      for (const t of NUDGE_THRESHOLDS) {
+        if (pct >= t.pct) return t.level;
+      }
+      return 'green';
+    }
+
+    test('nudge: 0% = green', () => {
+      assertEqual(getNudgeLevel(0), 'green');
+    }, 'Fresh conversation');
+
+    test('nudge: 39% = green', () => {
+      assertEqual(getNudgeLevel(39), 'green');
+    }, 'Just under yellow threshold');
+
+    test('nudge: 40% = yellow', () => {
+      assertEqual(getNudgeLevel(40), 'yellow');
+    }, 'Boundary: exactly 40%');
+
+    test('nudge: 69% = yellow', () => {
+      assertEqual(getNudgeLevel(69), 'yellow');
+    }, 'Just under warning threshold');
+
+    test('nudge: 70% = warning', () => {
+      assertEqual(getNudgeLevel(70), 'warning');
+    }, 'Boundary: exactly 70%');
+
+    test('nudge: 84% = warning', () => {
+      assertEqual(getNudgeLevel(84), 'warning');
+    }, 'Just under red threshold');
+
+    test('nudge: 85% = red', () => {
+      assertEqual(getNudgeLevel(85), 'red');
+    }, 'Boundary: exactly 85%');
+
+    test('nudge: 94% = red', () => {
+      assertEqual(getNudgeLevel(94), 'red');
+    }, 'Just under critical threshold');
+
+    test('nudge: 95% = critical', () => {
+      assertEqual(getNudgeLevel(95), 'critical');
+    }, 'Boundary: exactly 95%');
+
+    test('nudge: 100% = critical', () => {
+      assertEqual(getNudgeLevel(100), 'critical');
+    }, 'Context full');
+
+    // ============ Percentage Calculation Tests ============
+    // Note: Capped at 100% even if tokens exceed max
+
+    function calcPct(totalTokens, maxTokens) {
+      return Math.min(100, (totalTokens / maxTokens) * 100);
+    }
+
+    test('pct: 0 / 200000 = 0%', () => {
+      assertEqual(calcPct(0, 200000), 0);
+    }, 'Empty conversation');
+
+    test('pct: 100000 / 200000 = 50%', () => {
+      assertEqual(calcPct(100000, 200000), 50);
+    }, 'Half context used');
+
+    test('pct: 200000 / 200000 = 100%', () => {
+      assertEqual(calcPct(200000, 200000), 100);
+    }, 'Context full');
+
+    test('pct: 300000 / 200000 caps at 100%', () => {
+      assertEqual(calcPct(300000, 200000), 100);
+    }, 'Over limit still shows 100%');
+
+    test('pct: 100000 / 1000000 = 10%', () => {
+      assertEqual(calcPct(100000, 1000000), 10);
+    }, 'Extended context (1M) calculation');
+
+    // ============ Model Detection Pattern Tests ============
+    // Note: Patterns are case-insensitive. "Extended" triggers 1M, others 200K.
+
+    const MODEL_PATTERNS = [
+      { pattern: /extended/i, maxTokens: 1000000 },
+      { pattern: /opus/i, maxTokens: 200000 },
+      { pattern: /sonnet/i, maxTokens: 200000 },
+      { pattern: /haiku/i, maxTokens: 200000 },
+    ];
+
+    function detectModelFromText(text) {
+      for (const m of MODEL_PATTERNS) {
+        if (m.pattern.test(text)) return m.maxTokens;
+      }
+      return null;
+    }
+
+    test('model: "Opus 4.5" = 200K', () => {
+      assertEqual(detectModelFromText('Opus 4.5'), 200000);
+    }, 'Current flagship model');
+
+    test('model: "Sonnet 4" = 200K', () => {
+      assertEqual(detectModelFromText('Sonnet 4'), 200000);
+    });
+
+    test('model: "Haiku" = 200K', () => {
+      assertEqual(detectModelFromText('Haiku'), 200000);
+    }, 'Fastest model');
+
+    test('model: "Extended thinking" = 1M', () => {
+      assertEqual(detectModelFromText('Extended thinking'), 1000000);
+    }, 'Extended mode enabled');
+
+    test('model: "extended" (lowercase) = 1M', () => {
+      assertEqual(detectModelFromText('extended'), 1000000);
+    }, 'Case insensitive match');
+
+    test('model: "Unknown Model" = null', () => {
+      assertEqual(detectModelFromText('Unknown Model'), null);
+    }, 'Falls back to default when no match');
+
+    // ============ Format Tokens Tests ============
+    // Note: <1000 = raw number, 1K-999K = K suffix, 1M+ = M suffix
+
+    function formatTokens(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+      return String(n);
+    }
+
+    test('format: 0 = "0"', () => {
+      assertEqual(formatTokens(0), '0');
+    });
+
+    test('format: 500 = "500"', () => {
+      assertEqual(formatTokens(500), '500');
+    }, 'Below 1K threshold');
+
+    test('format: 1000 = "1.0K"', () => {
+      assertEqual(formatTokens(1000), '1.0K');
+    }, 'Boundary: exactly 1K');
+
+    test('format: 1500 = "1.5K"', () => {
+      assertEqual(formatTokens(1500), '1.5K');
+    });
+
+    test('format: 200000 = "200.0K"', () => {
+      assertEqual(formatTokens(200000), '200.0K');
+    }, 'Default context limit');
+
+    test('format: 1000000 = "1.0M"', () => {
+      assertEqual(formatTokens(1000000), '1.0M');
+    }, 'Boundary: exactly 1M');
+
+    test('format: 1500000 = "1.5M"', () => {
+      assertEqual(formatTokens(1500000), '1.5M');
+    });
+
+    // ============ Render Results ============
+    const container = document.getElementById('results');
+
+    const groupMeta = {
+      'estimateTokens': {
+        title: 'Token Estimation',
+        note: 'Uses char/4 heuristic. ~15% accuracy vs real tokenizer, but sufficient for directional thresholds.'
+      },
+      'nudge': {
+        title: 'Nudge Thresholds',
+        note: 'Color transitions at 40% (yellow), 70% (warning), 85% (red), 95% (critical).'
+      },
+      'pct': {
+        title: 'Percentage Calculation',
+        note: 'Capped at 100% even if estimated tokens exceed context window.'
+      },
+      'model': {
+        title: 'Model Detection',
+        note: 'Regex patterns match model names in UI. "Extended" triggers 1M context, all others 200K.'
+      },
+      'format': {
+        title: 'Token Formatting',
+        note: 'Human-readable display: raw <1K, K suffix 1K-999K, M suffix 1M+.'
+      }
+    };
+
+    const groups = {};
+    results.forEach(r => {
+      const groupName = r.name.split(':')[0];
+      if (!groups[groupName]) groups[groupName] = [];
+      groups[groupName].push(r);
+    });
+
+    for (const [groupKey, tests] of Object.entries(groups)) {
+      const meta = groupMeta[groupKey] || { title: groupKey, note: '' };
+      const groupDiv = document.createElement('div');
+      groupDiv.className = 'test-group';
+      groupDiv.innerHTML = `
+        <h2>${meta.title}</h2>
+        ${meta.note ? `<div class="test-group-note">${meta.note}</div>` : ''}
+      `;
+
+      tests.forEach(t => {
+        const div = document.createElement('div');
+        div.className = `test ${t.pass ? 'pass' : 'fail'}`;
+        const testName = t.name.split(': ')[1] || t.name;
+        const note = testNotes[t.name];
+        div.innerHTML = `
+          <span class="status">${t.pass ? 'PASS' : 'FAIL'}</span>
+          <span class="name">${testName}${note ? ` <span style="color:#737373;font-size:11px;">— ${note}</span>` : ''}</span>
+          ${t.detail ? `<span class="detail">${t.detail}</span>` : ''}
+        `;
+        groupDiv.appendChild(div);
+      });
+
+      container.appendChild(groupDiv);
+    }
+
+    const passed = results.filter(r => r.pass).length;
+    const total = results.length;
+    const summary = document.getElementById('summary');
+    summary.textContent = `${passed} / ${total} unit tests passed`;
+    summary.className = `summary ${passed === total ? 'all-pass' : 'has-fail'}`;
+  </script>
+</body>
+</html>
