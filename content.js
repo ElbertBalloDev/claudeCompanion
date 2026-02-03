@@ -140,6 +140,7 @@
         <div id="cc-tooltip-pct">0% used</div>
         <div id="cc-tooltip-nudge">Plenty of context remaining.</div>
         <button id="cc-summarize-btn">Ask for summary</button>
+        <button id="cc-topics-btn">Map topics</button>
       </div>
     `;
     document.body.appendChild(meter);
@@ -147,6 +148,11 @@
     document.getElementById('cc-summarize-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       summarizeConversation();
+    });
+
+    document.getElementById('cc-topics-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      mapTopics();
     });
 
     return meter;
@@ -166,16 +172,264 @@
     return null;
   }
 
-  function summarizeConversation() {
-    const prompt = `Please summarize our conversation so far. I want to continue in a new chat.
+  function mapTopics() {
+    const prompt = `[INSTRUCTION - DO NOT RESPOND CONVERSATIONALLY]
 
-Include:
+List the distinct topics or threads we've covered in this conversation.
+
+Output ONLY a numbered list:
+1. [Topic name] — [One sentence description]
+2. [Topic name] — [One sentence description]
+...
+
+Only list major topics, not every small tangent.
+
+Begin list now:`;
+
+    const input = findInputElement();
+    if (input) {
+      if (input.tagName === 'TEXTAREA') {
+        input.value = prompt;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      } else {
+        input.textContent = prompt;
+        input.dispatchEvent(new InputEvent('input', { bubbles: true, data: prompt }));
+      }
+      input.focus();
+      showToast('Hit send — button will appear when Claude responds', 'success');
+      watchForResponse();
+    } else {
+      navigator.clipboard.writeText(prompt).then(() => {
+        showToast('Copied prompt — paste and send', 'success');
+      });
+    }
+  }
+
+  // --- Watch for Claude's response to complete, then show parse button ---
+  let responseWatchInterval = null;
+  let initialOlCount = 0;
+  let lastOlContent = '';
+  let stableCount = 0;
+
+  function watchForResponse() {
+    if (responseWatchInterval) clearInterval(responseWatchInterval);
+
+    const container = findChatContainer();
+    if (container) {
+      initialOlCount = container.querySelectorAll('ol').length;
+    }
+    lastOlContent = '';
+    stableCount = 0;
+
+    responseWatchInterval = setInterval(() => {
+      const container = findChatContainer();
+      if (!container) return;
+
+      const lists = container.querySelectorAll('ol');
+      if (lists.length <= initialOlCount) return;
+
+      // Get the latest list's content
+      const latestOl = lists[lists.length - 1];
+      const currentContent = latestOl.innerHTML;
+
+      // Check if content has stabilized (not streaming anymore)
+      if (currentContent === lastOlContent) {
+        stableCount++;
+        if (stableCount >= 1) { // Stable for 1 second
+          clearInterval(responseWatchInterval);
+          responseWatchInterval = null;
+          showParseButton();
+        }
+      } else {
+        stableCount = 0;
+        lastOlContent = currentContent;
+      }
+    }, 1000);
+
+    // Stop watching after 2 minutes
+    setTimeout(() => {
+      if (responseWatchInterval) {
+        clearInterval(responseWatchInterval);
+        responseWatchInterval = null;
+      }
+    }, 120000);
+  }
+
+  function showParseButton() {
+    const existing = document.getElementById('cc-parse-btn');
+    if (existing) existing.remove();
+
+    const btn = document.createElement('button');
+    btn.id = 'cc-parse-btn';
+    btn.textContent = 'Show topics';
+    document.body.appendChild(btn);
+
+    setTimeout(() => btn.classList.add('cc-visible'), 10);
+
+    btn.addEventListener('click', () => {
+      btn.remove();
+      parseAndShowTopics();
+    });
+
+    // Auto-remove after 2 minutes
+    setTimeout(() => {
+      if (btn.isConnected) btn.remove();
+    }, 120000);
+  }
+
+  function parseAndShowTopics() {
+    const container = findChatContainer();
+    if (!container) {
+      showToast('Could not find chat container', 'error');
+      return;
+    }
+
+    // Find all ordered lists in the chat
+    const lists = container.querySelectorAll('ol');
+    let topics = [];
+
+    // Get the last ordered list (most recent response)
+    for (let i = lists.length - 1; i >= 0 && topics.length === 0; i--) {
+      const items = lists[i].querySelectorAll('li');
+      items.forEach(li => {
+        const text = li.textContent.trim();
+        const match = text.match(/^(.+?)\s*[—\-–]\s*(.+)$/);
+        if (match) {
+          topics.push({
+            name: match[1].trim().replace(/\*\*/g, ''),
+            description: match[2].trim()
+          });
+        } else if (text.length > 3 && text.length < 150) {
+          // No description, just the topic name
+          topics.push({
+            name: text.replace(/\*\*/g, ''),
+            description: ''
+          });
+        }
+      });
+    }
+
+    if (topics.length >= 2) {
+      showTopicButtons(topics);
+    } else {
+      showToast('Could not find topic list — make sure Claude responded', 'error');
+    }
+  }
+
+  function showTopicButtons(topics) {
+    const existing = document.getElementById('cc-topic-panel');
+    if (existing) existing.remove();
+
+    const panel = document.createElement('div');
+    panel.id = 'cc-topic-panel';
+    panel.innerHTML = `
+      <div id="cc-topic-header">
+        <span>Select topics to summarize</span>
+        <button id="cc-topic-close">&times;</button>
+      </div>
+      <div id="cc-topic-list"></div>
+      <div id="cc-topic-footer">
+        <span id="cc-topic-count">0 selected</span>
+        <button id="cc-topic-summarize" disabled>Summarize</button>
+      </div>
+    `;
+    document.body.appendChild(panel);
+
+    const list = document.getElementById('cc-topic-list');
+    const selected = new Set();
+
+    topics.forEach((topic, idx) => {
+      const item = document.createElement('label');
+      item.className = 'cc-topic-item';
+      item.innerHTML = `
+        <input type="checkbox" data-idx="${idx}">
+        <div class="cc-topic-content">
+          <strong>${topic.name}</strong>
+          ${topic.description ? '<span>' + topic.description + '</span>' : ''}
+        </div>
+      `;
+
+      const checkbox = item.querySelector('input');
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+          selected.add(idx);
+          item.classList.add('cc-selected');
+        } else {
+          selected.delete(idx);
+          item.classList.remove('cc-selected');
+        }
+        updateFooter();
+      });
+
+      list.appendChild(item);
+    });
+
+    function updateFooter() {
+      const count = selected.size;
+      document.getElementById('cc-topic-count').textContent = count + ' selected';
+      document.getElementById('cc-topic-summarize').disabled = count === 0;
+    }
+
+    document.getElementById('cc-topic-summarize').addEventListener('click', () => {
+      const selectedTopics = Array.from(selected).map(i => topics[i].name);
+      panel.remove();
+      summarizeTopics(selectedTopics);
+    });
+
+    document.getElementById('cc-topic-close').addEventListener('click', () => {
+      panel.remove();
+    });
+
+    setTimeout(() => panel.classList.add('cc-visible'), 10);
+  }
+
+  function summarizeTopics(topicNames) {
+    const topicList = topicNames.map((t, i) => (i + 1) + '. ' + t).join('\n');
+
+    const prompt = `[INSTRUCTION - DO NOT RESPOND CONVERSATIONALLY]
+
+Summarize ONLY our discussions about these specific topics from this conversation:
+
+${topicList}
+
+Ignore other topics. For each topic, provide:
+- Key points discussed
+- Decisions or conclusions
+- Any code or solutions
+- Open questions
+
+Output a focused summary I can reference later.
+
+Begin summary now:`;
+
+    const input = findInputElement();
+    if (input) {
+      if (input.tagName === 'TEXTAREA') {
+        input.value = prompt;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      } else {
+        input.textContent = prompt;
+        input.dispatchEvent(new InputEvent('input', { bubbles: true, data: prompt }));
+      }
+      input.focus();
+      showToast('Prompt ready — hit send', 'success');
+    }
+  }
+
+  function summarizeConversation() {
+    const prompt = `[INSTRUCTION - DO NOT RESPOND CONVERSATIONALLY]
+
+Please summarize our conversation so far. I want to continue in a new chat.
+
+Output ONLY a structured summary with:
 - What we were working on
 - Key decisions made
 - Current status / where we left off
 - Any pending questions or next steps
 
-Format it so I can paste it into a new conversation and continue seamlessly.`;
+Format it so I can paste it into a new conversation and continue seamlessly.
+
+Begin summary now:`;
 
     const input = findInputElement();
     if (input) {
