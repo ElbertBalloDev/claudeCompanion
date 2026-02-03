@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  release:
+    types: [created]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate manifest.json
+        run: |
+          echo "Checking manifest.json is valid JSON..."
+          cat manifest.json | jq . > /dev/null
+
+          echo "Checking required fields..."
+          jq -e '.manifest_version' manifest.json
+          jq -e '.name' manifest.json
+          jq -e '.version' manifest.json
+
+      - name: Check referenced files exist
+        run: |
+          echo "Checking content scripts..."
+          for file in $(jq -r '.content_scripts[]?.js[]?' manifest.json); do
+            test -f "$file" || (echo "Missing: $file" && exit 1)
+          done
+          for file in $(jq -r '.content_scripts[]?.css[]?' manifest.json); do
+            test -f "$file" || (echo "Missing: $file" && exit 1)
+          done
+
+          echo "Checking background script..."
+          bg=$(jq -r '.background.service_worker // empty' manifest.json)
+          if [ -n "$bg" ]; then
+            test -f "$bg" || (echo "Missing: $bg" && exit 1)
+          fi
+
+          echo "Checking icons..."
+          for icon in $(jq -r '.icons[]?' manifest.json); do
+            test -f "$icon" || (echo "Missing: $icon" && exit 1)
+          done
+
+          echo "All referenced files exist!"
+
+  package:
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, validate]
+    if: github.event_name == 'release'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create extension zip
+        run: |
+          mkdir -p dist
+          zip -r dist/claude-companion-${{ github.ref_name }}.zip \
+            manifest.json \
+            background.js \
+            content.js \
+            meter.css \
+            popup.html \
+            popup.js \
+            icons/
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-zip
+          path: dist/*.zip
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*.zip

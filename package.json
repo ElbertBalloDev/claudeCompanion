@@ -1,0 +1,13 @@
+{
+  "name": "claude-companion",
+  "version": "0.1.0",
+  "description": "Context meter and smart nudges for claude.ai",
+  "private": true,
+  "scripts": {
+    "lint": "eslint *.js",
+    "test": "node tests/run.js"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  }
+}

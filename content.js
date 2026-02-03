@@ -4,11 +4,6 @@
 
   if (document.getElementById('cc-meter')) return; // already injected
 
-  // --- Token estimation ---
-  function estimateTokens(text) {
-    return Math.ceil((text || '').length / 4);
-  }
-
   // --- DOM selector discovery (cached) ---
   let cachedContainer = null;
   let containerMiss = 0;
@@ -46,7 +41,6 @@
     { pattern: /sonnet/i, maxTokens: 200000 },
     { pattern: /haiku/i, maxTokens: 200000 },
   ];
-  const DEFAULT_MAX_TOKENS = 200000;
   let lastDetectedModel = '';
 
   function detectModel() {
@@ -156,20 +150,6 @@
     });
 
     return meter;
-  }
-
-  function findMessageElements() {
-    const container = findChatContainer();
-    if (!container) return [];
-
-    let messages = container.querySelectorAll('[data-message-author-role]');
-    if (messages.length > 0) return Array.from(messages);
-
-    messages = container.querySelectorAll('[role="row"], [role="listitem"], [role="article"]');
-    if (messages.length > 1) return Array.from(messages);
-
-    const candidates = container.querySelectorAll(':scope > div > div > div');
-    return Array.from(candidates).filter(el => (el.textContent || '').trim().length > 20);
   }
 
   function findInputElement() {
