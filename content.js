@@ -73,6 +73,8 @@
   let lastDetectedModel = '';
 
   function detectModel() {
+    if (!isExtensionValid()) return;
+
     // Look for buttons/elements near the input area containing model names
     const selectors = [
       'button', 'div[role="button"]', '[data-testid*="model"]',
@@ -550,6 +552,10 @@ Begin summary now:`;
 
   function recalculate() {
     if (isRecalculating) return;
+    if (!isExtensionValid()) {
+      cleanup();
+      return;
+    }
     isRecalculating = true;
 
     const totalTokens = extractTokenCount();
