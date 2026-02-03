@@ -4,6 +4,35 @@
 
   if (document.getElementById('cc-meter')) return; // already injected
 
+  // Check if extension context is still valid
+  function isExtensionValid() {
+    try {
+      return chrome.runtime && chrome.runtime.id;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Cleanup function for when extension is invalidated
+  let cleanupIntervals = [];
+  function registerInterval(id) {
+    cleanupIntervals.push(id);
+    return id;
+  }
+
+  function cleanup() {
+    cleanupIntervals.forEach(id => clearInterval(id));
+    cleanupIntervals = [];
+    const meter = document.getElementById('cc-meter');
+    if (meter) meter.remove();
+    const toast = document.getElementById('cc-toast');
+    if (toast) toast.remove();
+    const panel = document.getElementById('cc-topic-panel');
+    if (panel) panel.remove();
+    const parseBtn = document.getElementById('cc-parse-btn');
+    if (parseBtn) parseBtn.remove();
+  }
+
   // --- DOM selector discovery (cached) ---
   let cachedContainer = null;
   let containerMiss = 0;
@@ -221,7 +250,12 @@ Begin list now:`;
     lastOlContent = '';
     stableCount = 0;
 
-    responseWatchInterval = setInterval(() => {
+    responseWatchInterval = registerInterval(setInterval(() => {
+      if (!isExtensionValid()) {
+        cleanup();
+        return;
+      }
+
       const container = findChatContainer();
       if (!container) return;
 
@@ -244,7 +278,7 @@ Begin list now:`;
         stableCount = 0;
         lastOlContent = currentContent;
       }
-    }, 1000);
+    }, 1000));
 
     // Stop watching after 2 minutes
     setTimeout(() => {
@@ -556,7 +590,12 @@ Begin summary now:`;
   let currentObserver = startObserver();
 
   // Periodic fallback — also re-targets observer if container changed
-  setInterval(() => {
+  registerInterval(setInterval(() => {
+    if (!isExtensionValid()) {
+      cleanup();
+      return;
+    }
+
     const container = findChatContainer();
     if (container !== cachedContainer || !container.isConnected) {
       cachedContainer = null;
@@ -565,5 +604,5 @@ Begin summary now:`;
     }
     detectModel();
     recalculate();
-  }, 10000); // Every 10s instead of 5s
+  }, 10000)); // Every 10s instead of 5s
 })();
